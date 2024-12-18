@@ -24,7 +24,7 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, batch_size=64):
     merged_data = merged_data.dropna()
 
     # 특성 변수와 타겟 변수 분리
-    X = merged_data[['FEDFUNDS', 'CPIAUCNS']].values
+    X = merged_data[['FEDFUNDS', 'CPIAUCNS', 'Close']].values
     y = merged_data['Stock_Return'].values
 
     # 데이터 정규화 (Standard Scaling)

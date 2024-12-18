@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
 
     # Transformer 모델 초기화
-    input_size = 2
+    input_size = 3
     d_model = 64
     nhead = 4
     num_layers = 4
