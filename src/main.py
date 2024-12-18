@@ -31,7 +31,7 @@ if __name__ == "__main__":
     train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
 
     # LSTM 모델 초기화
-    # input_size = 2
+    # input_size = 3
     # hidden_size = 64
     # output_size = 1
 
