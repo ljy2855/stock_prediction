@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=stock_db
+    volumes:
+      - ./data/influxdb:/var/lib/influxdb
+
+  python_app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: stock_prediction_app
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"  # Grafana 웹 대시보드 포트
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
