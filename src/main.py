@@ -1,11 +1,10 @@
 from datetime import datetime
 
-from data_processing.prepare_data import prepare_data
+from data_processing.prepare_data import prepare_data_for_sequences
 from data_processing.stock_data import download_stock_data
 from data_processing.fred_data import download_economic_data
 from data_processing.transform import merge_data
-from model.evaluation import evaluate_model
-from model.tranning import train_and_save_model
+from model.base import LSTMModel, TimeSeriesModel
 from utils.config import config
 
 START_DATE = "2015-01-01"
@@ -13,8 +12,7 @@ TICKER = "SPY"
 END_DATE = datetime.today().strftime('%Y-%m-%d')
 
 
-if __name__ == "__main__":
-    
+def init_data():
     # 경로 설정
     stock_data_path = config.get_path("paths", "raw_data", "stock_data")
     
@@ -27,11 +25,11 @@ if __name__ == "__main__":
     # 데이터 병합
     merged_data = merge_data(stock_data, rate_data, cpi_data, config.get_path("paths", "processed_data", "stock_data"))
 
-    X_train, X_test, y_train, y_test = prepare_data()
+if __name__ == "__main__":
+    train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
 
-    # 3. 모델 훈련 및 저장
-    model_path = "./models/stock_model.pkl"
-    model = train_and_save_model(X_train, X_test, y_train, y_test, model_path)
-
-    # 4. 모델 평가
-    evaluate_model(model_path, X_test, y_test)
+    # 모델 훈련 및 저장
+    model = TimeSeriesModel(LSTMModel, input_size=2, hidden_size=64, output_size=1, model_name="LSTM")
+    model.train(train_loader, num_epochs=50)
+    model.evaluate(test_loader)
+    model.save_model()
