@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, r2_score
 import os
+import json
+
+
+
 
 class TimeSeriesModel:
     def __init__(self, model, lr=0.001, model_name="Model"):
@@ -41,10 +45,28 @@ class TimeSeriesModel:
             if verbose:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss / len(train_loader):.4f}")
 
-    def evaluate(self, test_loader):
+    def get_model_details(self):
         """
-        모델 평가 함수
+        PyTorch 모델의 레이어 세부 정보를 추출하여 정돈된 형식으로 반환.
+        :param model: PyTorch 모델 객체
+        :return: 모델의 레이어 정보 (리스트 형식)
+        """
+        model_details = []
+        for name, layer in self.model.named_children():
+            layer_info = {
+                "layer_name": name,
+                "layer_type": layer.__class__.__name__,
+                "details": str(layer)
+            }
+            model_details.append(layer_info)
+        return model_details
+
+    def evaluate(self, test_loader, report_path="report", additional_info=None):
+        """
+        모델 평가 함수 (평가 결과를 누적 저장)
         :param test_loader: PyTorch DataLoader 객체 (테스트 데이터)
+        :param report_path: 평가 결과를 저장할 폴더 경로
+        :param additional_info: 추가 정보 (파라미터, 배치 크기 등) 딕셔너리
         :return: MSE와 R² 점수
         """
         self.model.eval()
@@ -55,10 +77,49 @@ class TimeSeriesModel:
                 outputs = self.model(inputs)
                 y_pred.extend(outputs.squeeze().cpu().numpy())
                 y_true.extend(targets.cpu().numpy())
+
+        # 성능 지표 계산
         mse = mean_squared_error(y_true, y_pred)
         r2 = r2_score(y_true, y_pred)
         print(f"Mean Squared Error: {mse:.4f}")
         print(f"R2 Score: {r2:.4f}")
+
+        # 보고서 파일 경로
+        os.makedirs(report_path, exist_ok=True)
+        report_file = os.path.join(report_path, "evaluation_results.json")
+
+        # 모델 파라미터 가져오기
+        model_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+
+        # 새 평가 결과
+        new_entry = {
+            "model_name": self.model_name,
+            "evaluation_metrics": {
+                "mean_squared_error": mse,
+                "r2_score": r2
+            },
+            "model_parameters": {
+                "total_params": model_params,
+                "layer_details": self.get_model_details()
+            },
+            "additional_info": additional_info or {}
+        }
+
+        # 기존 보고서 읽기 (없으면 빈 리스트 생성)
+        if os.path.exists(report_file):
+            with open(report_file, "r") as f:
+                existing_data = json.load(f)
+        else:
+            existing_data = []
+
+        # 새 데이터를 기존 데이터에 추가
+        existing_data.append(new_entry)
+
+        # 업데이트된 데이터를 저장
+        with open(report_file, "w") as f:
+            json.dump(existing_data, f, indent=4)
+
+        print(f"Evaluation report updated at {report_file}")
         return mse, r2
 
     def save_model(self, save_path="models"):
