@@ -5,27 +5,27 @@ from sklearn.metrics import mean_squared_error, r2_score
 import os
 
 class TimeSeriesModel:
-    def __init__(self, model, input_size, output_size, hidden_size=64, lr=0.001, model_name="LSTM"):
+    def __init__(self, model, lr=0.001, model_name="Model"):
         """
         TimeSeriesModel 클래스를 초기화합니다.
-        :param model: PyTorch 모델 클래스
-        :param input_size: 입력 특성의 크기
-        :param output_size: 출력 특성의 크기
-        :param hidden_size: LSTM 등에서 사용하는 히든 레이어 크기
+        :param model: PyTorch 모델 객체
+        :param input_size: 입력 특성 크기
+        :param output_size: 출력 크기
         :param lr: 학습률
-        :param model_name: 모델의 이름 (저장/로드에 사용)
+        :param model_name: 모델 이름 (저장 파일명)
         """
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = model(input_size, hidden_size, output_size).to(self.device)
+        self.model = model.to(self.device)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
-    def train(self, train_loader, num_epochs=50):
+    def train(self, train_loader, num_epochs=50, verbose=True):
         """
         모델 훈련 함수
         :param train_loader: PyTorch DataLoader 객체 (훈련 데이터)
-        :param num_epochs: 훈련 반복 횟수
+        :param num_epochs: 학습 반복 횟수
+        :param verbose: 학습 로그 출력 여부
         """
         self.model.train()
         for epoch in range(num_epochs):
@@ -38,7 +38,8 @@ class TimeSeriesModel:
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
-            print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss / len(train_loader):.4f}")
+            if verbose:
+                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss / len(train_loader):.4f}")
 
     def evaluate(self, test_loader):
         """
@@ -74,29 +75,7 @@ class TimeSeriesModel:
         모델 로드 함수
         :param save_path: 모델 파일 경로
         """
-        self.model.load_state_dict(torch.load(f"{save_path}/{self.model_name}.pth", map_location=self.device))
+        model_path = f"{save_path}/{self.model_name}.pth"
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
-        print(f"Model loaded from {save_path}/{self.model_name}.pth")
-
-
-class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(LSTMModel, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x):
-        lstm_out, _ = self.lstm(x)
-        output = self.fc(lstm_out[:, -1, :]) 
-        return output
-
-class GRUModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(GRUModel, self).__init__()
-        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x):
-        gru_out, _ = self.gru(x)
-        output = self.fc(gru_out[:, -1, :]) 
-        return output
+        print(f"Model loaded from {model_path}")

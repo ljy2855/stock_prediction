@@ -3,8 +3,10 @@ from datetime import datetime
 from data_processing.prepare_data import prepare_data_for_sequences
 from data_processing.stock_data import download_stock_data
 from data_processing.fred_data import download_economic_data
-from data_processing.transform import merge_data
-from model.base import LSTMModel, TimeSeriesModel
+from data_processing.transform_data import merge_data
+from model.base import TimeSeriesModel
+from model.lstm import LSTMModel
+from model.transformer import TransformerTimeSeriesModel
 from utils.config import config
 
 START_DATE = "2015-01-01"
@@ -28,8 +30,27 @@ def init_data():
 if __name__ == "__main__":
     train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
 
-    # 모델 훈련 및 저장
-    model = TimeSeriesModel(LSTMModel, input_size=2, hidden_size=64, output_size=1, model_name="LSTM")
-    model.train(train_loader, num_epochs=50)
-    model.evaluate(test_loader)
-    model.save_model()
+    # LSTM 모델 초기화
+    # input_size = 2
+    # hidden_size = 64
+    # output_size = 1
+
+    # lstm_model = LSTMModel(input_size, hidden_size, output_size)
+    # trainer = TimeSeriesModel(lstm_model, lr=0.001, model_name="LSTM")
+
+
+
+    # Transformer 모델 초기화
+    input_size = 2
+    d_model = 64
+    nhead = 4
+    num_layers = 4
+    output_size = 1
+
+    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, output_size)
+    trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Transformer")
+
+    # 훈련 및 평가
+    trainer.train(train_loader, num_epochs=50)
+    trainer.evaluate(test_loader)
+    trainer.save_model()
