@@ -28,6 +28,8 @@ def init_data():
     merged_data = merge_data(stock_data, rate_data, cpi_data, config.get_path("paths", "processed_data", "stock_data"))
 
 if __name__ == "__main__":
+    # init_data()
+
     train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
 
     # LSTM 모델 초기화
@@ -41,16 +43,16 @@ if __name__ == "__main__":
 
 
     # Transformer 모델 초기화
-    input_size = 3
-    d_model = 64
+    input_size = 8
+    d_model = 128
     nhead = 4
-    num_layers = 4
+    num_layers = 6
     output_size = 1
 
     transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, output_size)
     trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Transformer")
 
     # 훈련 및 평가
-    trainer.train(train_loader, num_epochs=50)
+    trainer.train(train_loader, num_epochs=100, verbose=True, early_stopping=True, patience=10)
     trainer.evaluate(test_loader)
     trainer.save_model()

@@ -2,7 +2,6 @@ import yaml
 import os
 from dotenv import load_dotenv
 
-
 class ConfigLoader:
     """
     설정 파일을 불러와 경로를 관리하는 클래스
@@ -27,16 +26,19 @@ class ConfigLoader:
 
     def get_path(self, *keys):
         """
-        YAML 설정 파일에서 경로를 반환
+        YAML 설정 파일에서 경로를 반환하고 절대 경로로 변환
         :param keys: YAML 키 순서대로 입력 (예: 'paths', 'raw_data', 'stock_data')
-        :return: 해당 경로
+        :return: 해당 경로의 절대 경로
         """
         value = self.config
         for key in keys:
             value = value.get(key, {})
             if not value:
                 raise KeyError(f"Key {key} not found in config file.")
-        return value
+        
+        # 상대 경로를 절대 경로로 변환
+        absolute_path = os.path.abspath(value)
+        return absolute_path
     
     def get_secret(self, secret_name):
         """

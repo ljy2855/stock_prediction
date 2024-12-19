@@ -7,7 +7,7 @@ def merge_data(stock_data, rate_data, cpi_data,save_path):
     # 데이터 저장
     merged_data = stock_data.join([rate_data, cpi_data], how='inner')
     merged_data.columns = [
-        'Adj_Close', 'Close', 'High', 'Low', 'Open', 'Volume', 
+        'Price', 'Close', 'High', 'Low', 'Open', 'Volume', 
         'FEDFUNDS', 'CPIAUCNS'
     ]
 

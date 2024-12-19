@@ -1,9 +1,12 @@
+from uuid import uuid4
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, r2_score
 import os
 import json
+from tqdm import tqdm
+import numpy as np
 
 class TimeSeriesModel:
     def __init__(self, model, lr=0.001, model_name="Model"):
@@ -16,31 +19,59 @@ class TimeSeriesModel:
         :param model_name: 모델 이름 (저장 파일명)
         """
         self.model_name = model_name
+        self.id = uuid4().hex
         self.device = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
-    def train(self, train_loader, num_epochs=50, verbose=True):
+    def train(self, train_loader, num_epochs=50, verbose=True, early_stopping=False, patience=10):
         """
         모델 훈련 함수
         :param train_loader: PyTorch DataLoader 객체 (훈련 데이터)
         :param num_epochs: 학습 반복 횟수
         :param verbose: 학습 로그 출력 여부
+        :param early_stopping: 조기 종료 여부
+        :param patience: 조기 종료를 위한 허용 에포크 수
         """
         self.model.train()
+        best_loss = float('inf')
+        epochs_no_improve = 0
+        loss_history = []
+
         for epoch in range(num_epochs):
-            epoch_loss = 0
-            for inputs, targets in train_loader:
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-                self.optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs.squeeze(), targets)
-                loss.backward()
-                self.optimizer.step()
-                epoch_loss += loss.item()
+            epoch_loss = 0.0
+            with tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}]", unit="batch") as tepoch:
+                for inputs, targets in tepoch:
+                    inputs, targets = inputs.to(self.device), targets.to(self.device)
+                    self.optimizer.zero_grad()
+                    outputs = self.model(inputs)
+                    loss = self.criterion(outputs.squeeze(), targets)
+                    loss.backward()
+                    self.optimizer.step()
+                    batch_loss = loss.item()
+                    epoch_loss += batch_loss
+                    tepoch.set_postfix(loss=batch_loss)
+
+            # 평균 손실 계산
+            epoch_loss /= len(train_loader)
+            loss_history.append(epoch_loss)
+
             if verbose:
-                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss / len(train_loader):.4f}")
+                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}")
+
+            # 조기 종료 로직
+            if early_stopping:
+                if epoch_loss < best_loss:
+                    best_loss = epoch_loss
+                    epochs_no_improve = 0
+                else:
+                    epochs_no_improve += 1
+                    if epochs_no_improve >= patience:
+                        print(f"Early stopping triggered after {epoch+1} epochs.")
+                        break
+
+        return loss_history
 
     def get_model_details(self):
         """
@@ -82,11 +113,11 @@ class TimeSeriesModel:
 
     def evaluate(self, test_loader, report_path="report", additional_info=None):
         """
-        모델 평가 함수 (평가 결과를 누적 저장)
+        모델 평가 함수 (평가 결과를 누적 저장, Adjusted R² 지원)
         :param test_loader: PyTorch DataLoader 객체 (테스트 데이터)
         :param report_path: 평가 결과를 저장할 폴더 경로
         :param additional_info: 추가 정보 (파라미터, 배치 크기 등) 딕셔너리
-        :return: MSE와 R² 점수
+        :return: MSE, R², Adjusted R² 점수
         """
         self.model.eval()
         y_true, y_pred = [], []
@@ -100,8 +131,15 @@ class TimeSeriesModel:
         # 성능 지표 계산
         mse = mean_squared_error(y_true, y_pred)
         r2 = r2_score(y_true, y_pred)
+
+        # 조정된 R² 계산
+        n = len(y_true)  # 샘플 수
+        k = inputs.size(-1)  # 입력 변수(특성) 수
+        adjusted_r2 = 1 - ((1 - r2) * (n - 1) / (n - k - 1))
+
         print(f"Mean Squared Error: {mse:.4f}")
         print(f"R2 Score: {r2:.4f}")
+        print(f"Adjusted R2 Score: {adjusted_r2:.4f}")
 
         # 보고서 파일 경로
         os.makedirs(report_path, exist_ok=True)
@@ -113,9 +151,11 @@ class TimeSeriesModel:
         # 새 평가 결과
         new_entry = {
             "model_name": self.model_name,
+            "model_id": self.id,
             "evaluation_metrics": {
                 "mean_squared_error": mse,
-                "r2_score": r2
+                "r2_score": r2,
+                "adjusted_r2_score": adjusted_r2
             },
             "model_parameters": {
                 "total_params": model_params,
@@ -139,7 +179,8 @@ class TimeSeriesModel:
             json.dump(existing_data, f, indent=4)
 
         print(f"Evaluation report updated at {report_file}")
-        return mse, r2
+        return mse, r2, adjusted_r2
+
 
     def save_model(self, save_path="models"):
         """
@@ -147,15 +188,5 @@ class TimeSeriesModel:
         :param save_path: 모델 파일 저장 경로
         """
         os.makedirs(save_path, exist_ok=True)
-        torch.save(self.model.state_dict(), f"{save_path}/{self.model_name}.pth")
+        torch.save(self.model.state_dict(), f"{save_path}/{self.model_name}_{self.id}.pth")
         print(f"Model saved to {save_path}/{self.model_name}.pth")
-
-    def load_model(self, save_path="models"):
-        """
-        모델 로드 함수
-        :param save_path: 모델 파일 경로
-        """
-        model_path = f"{save_path}/{self.model_name}.pth"
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-        self.model.eval()
-        print(f"Model loaded from {model_path}")
