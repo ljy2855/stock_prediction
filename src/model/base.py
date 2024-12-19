@@ -5,9 +5,6 @@ from sklearn.metrics import mean_squared_error, r2_score
 import os
 import json
 
-
-
-
 class TimeSeriesModel:
     def __init__(self, model, lr=0.001, model_name="Model"):
         """
@@ -47,8 +44,7 @@ class TimeSeriesModel:
 
     def get_model_details(self):
         """
-        PyTorch 모델의 레이어 세부 정보를 추출하여 정돈된 형식으로 반환.
-        :param model: PyTorch 모델 객체
+        모델의 레이어 세부 정보를 추출하여 JSON 형식으로 반환.
         :return: 모델의 레이어 정보 (리스트 형식)
         """
         model_details = []
@@ -56,10 +52,33 @@ class TimeSeriesModel:
             layer_info = {
                 "layer_name": name,
                 "layer_type": layer.__class__.__name__,
-                "details": str(layer)
+                "details": self.get_layer_details(layer)
             }
             model_details.append(layer_info)
         return model_details
+
+    def get_layer_details(self, layer):
+        """
+        레이어 객체의 주요 속성을 추출하여 JSON-friendly 딕셔너리로 반환.
+        :param layer: PyTorch 레이어 객체
+        :return: 레이어 속성 (딕셔너리 형식)
+        """
+        layer_details = {}
+        if hasattr(layer, 'in_features'):
+            layer_details['in_features'] = layer.in_features
+        if hasattr(layer, 'out_features'):
+            layer_details['out_features'] = layer.out_features
+        if hasattr(layer, 'kernel_size'):
+            layer_details['kernel_size'] = layer.kernel_size
+        if hasattr(layer, 'stride'):
+            layer_details['stride'] = layer.stride
+        if hasattr(layer, 'padding'):
+            layer_details['padding'] = layer.padding
+        if hasattr(layer, 'bias') and layer.bias is not None:
+            layer_details['bias'] = True
+        else:
+            layer_details['bias'] = False
+        return layer_details
 
     def evaluate(self, test_loader, report_path="report", additional_info=None):
         """
