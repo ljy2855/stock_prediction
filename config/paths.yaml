@@ -8,6 +8,7 @@ paths:
     stock_data: "data/processed/"
     news_with_sentiment: "data/processed/news_with_sentiment/"
     tweets_with_sentiment: "data/processed/tweets_with_sentiment/"
+    merged_data: "data/processed/merged_data.csv"
   logs:
     log_file: "logs/data_pipeline.log"
   output:
