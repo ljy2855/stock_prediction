@@ -1,0 +1,49 @@
+[
+    {
+        "model_name": "Transformer",
+        "model_id": "2d3da52c42714d09966f4533c87c490c",
+        "evaluation_metrics": {
+            "mean_squared_error": 0.04857909679412842,
+            "r2_score": -58.16366958618164,
+            "adjusted_r2_score": -58.197116646932784
+        },
+        "model_parameters": {
+            "total_params": 4156190,
+            "layer_details": [
+                {
+                    "layer_name": "input_layer",
+                    "layer_type": "Linear",
+                    "details": {
+                        "in_features": 8,
+                        "out_features": 128,
+                        "bias": true
+                    }
+                },
+                {
+                    "layer_name": "encoder_layer",
+                    "layer_type": "TransformerEncoderLayer",
+                    "details": {
+                        "bias": false
+                    }
+                },
+                {
+                    "layer_name": "transformer_encoder",
+                    "layer_type": "TransformerEncoder",
+                    "details": {
+                        "bias": false
+                    }
+                },
+                {
+                    "layer_name": "output_layer",
+                    "layer_type": "Linear",
+                    "details": {
+                        "in_features": 128,
+                        "out_features": 30,
+                        "bias": true
+                    }
+                }
+            ]
+        },
+        "additional_info": {}
+    }
+]
