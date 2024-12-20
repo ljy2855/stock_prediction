@@ -43,13 +43,13 @@ if __name__ == "__main__":
 
 
     # Transformer 모델 초기화
-    input_size = 8
-    d_model = 128
-    nhead = 4
-    num_layers = 6
-    output_size = 1
+    input_size = 8  # 입력 feature 수
+    d_model = 128   # 임베딩 차원
+    nhead = 4       # 멀티헤드 어텐션 수
+    num_layers = 6  # Transformer 레이어 수
+    forecast_steps = 30  # 예측 벡터 크기
 
-    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, output_size)
+    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, forecast_steps)
     trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Transformer")
 
     # 훈련 및 평가

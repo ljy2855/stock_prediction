@@ -8,12 +8,39 @@ from torch.utils.data import Dataset, DataLoader
 
 INPUT_VAR = ['FEDFUNDS', 'CPIAUCNS', 'Close', 'Volume', 'High', 'Low', 'Open', 'Price']
 
+def create_labels(price_data, window=20, threshold=0.01):
+    """
+    앞으로의 한 달간 주가 모멘텀을 기준으로 라벨 생성.
+    :param price_data: 종가 데이터 (numpy 배열 또는 pandas Series)
+    :param window: 한 달간의 기간 (데이터 포인트 개수)
+    :param threshold: 상승/하락을 판단하는 변화율 임계값
+    :return: 범주형 라벨 (0: 상승, 1: 하락, 2: 정체)
+    """
+    labels = []
+    for i in range(len(price_data)):
+        if i + window < len(price_data):
+            # 한 달간의 평균 변화율 계산
+            future_window = price_data[i:i+window]
+            future_return = (future_window[-1] - price_data[i]) / price_data[i]
+            
+            # 상승/하락/정체 분류
+            if future_return > threshold:
+                labels.append(0)  # 상승
+            elif future_return < -threshold:
+                labels.append(1)  # 하락
+            else:
+                labels.append(2)  # 정체
+        else:
+            labels.append(2)  # 데이터가 부족한 경우 정체로 처리
+    return labels
+
+
 def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64):
     """
-    데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환. 타겟은 다음 n_steps 동안의 누적 주가 변동률로 설정.
+    데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환. 타겟은 다음 forecast_steps 동안의 누적 주가 변동률 벡터로 설정.
     :param merged_data: 병합된 데이터 (DataFrame)
     :param n_steps: 입력 시퀀스 길이 (과거 n_steps 사용)
-    :param forecast_steps: 예측할 기간 길이 (다음 n_steps 동안의 누적 변동률)
+    :param forecast_steps: 예측할 기간 길이 (다음 forecast_steps 동안의 누적 변동률)
     :param batch_size: DataLoader의 배치 크기
     :return: PyTorch DataLoader (train_loader, test_loader)
     """
@@ -22,14 +49,20 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
         merged_data = pd.read_csv('data/processed/merged_data.csv', index_col=0)
 
     # 타겟 변수: 다음 forecast_steps 동안의 누적 변동률
-    merged_data['Target_Momentum'] = merged_data['Price'].pct_change(periods=forecast_steps).shift(-forecast_steps)
+    price = merged_data['Price'].values
+    target_momentum = [
+        (price[i + 1:i + 1 + forecast_steps] - price[i]) / price[i]
+        if i + 1 + forecast_steps <= len(price) else np.zeros(forecast_steps)
+        for i in range(len(price))
+    ]
+    merged_data['Target_Momentum'] = target_momentum
 
     # 결측값 제거
     merged_data = merged_data.dropna()
 
     # 특성 변수와 타겟 변수 분리
     X = merged_data[INPUT_VAR].values
-    y = merged_data['Target_Momentum'].values
+    y = np.vstack(merged_data['Target_Momentum'].values)  # 벡터 형태로 타겟 변환
 
     # 데이터 정규화 (Standard Scaling)
     scaler = StandardScaler()
@@ -38,12 +71,13 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
     # 훈련/테스트 분할
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, shuffle=False)
 
+    print(f"y_train shape: {y_train.shape}, y_test shape: {y_test.shape}")
     # 시퀀스 데이터 생성 함수
     def create_sequences(X, y, n_steps):
         sequences_X, sequences_y = [], []
-        for i in range(len(X) - n_steps - forecast_steps + 1):  # 예측 기간 고려
+        for i in range(len(X) - n_steps):
             seq_X = X[i:i + n_steps]
-            seq_y = y[i + n_steps - 1]  # 시퀀스 마지막 시점에서 시작하는 예측 값
+            seq_y = y[i + n_steps - 1]  # 시퀀스의 마지막 지점에서 타겟 시작
             sequences_X.append(seq_X)
             sequences_y.append(seq_y)
         return np.array(sequences_X), np.array(sequences_y)

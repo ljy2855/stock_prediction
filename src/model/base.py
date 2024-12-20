@@ -33,6 +33,7 @@ class TimeSeriesModel:
         :param verbose: 학습 로그 출력 여부
         :param early_stopping: 조기 종료 여부
         :param patience: 조기 종료를 위한 허용 에포크 수
+        :return: 학습 손실 기록
         """
         self.model.train()
         best_loss = float('inf')
@@ -44,21 +45,25 @@ class TimeSeriesModel:
             with tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}]", unit="batch") as tepoch:
                 for inputs, targets in tepoch:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
+                    
+                    # Forward 및 Backward
                     self.optimizer.zero_grad()
-                    outputs = self.model(inputs)
-                    loss = self.criterion(outputs.squeeze(), targets)
+                    outputs = self.model(inputs)  # (batch_size, forecast_steps)
+                    loss = self.criterion(outputs, targets)  # MSE 또는 CrossEntropy
                     loss.backward()
                     self.optimizer.step()
+
+                    # 배치 손실 기록 및 출력
                     batch_loss = loss.item()
                     epoch_loss += batch_loss
-                    tepoch.set_postfix(loss=batch_loss)
+                    tepoch.set_postfix(batch_loss=batch_loss)
 
-            # 평균 손실 계산
+            # 에포크 평균 손실 계산
             epoch_loss /= len(train_loader)
             loss_history.append(epoch_loss)
 
             if verbose:
-                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}")
+                print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {epoch_loss:.4f}")
 
             # 조기 종료 로직
             if early_stopping:
@@ -72,6 +77,7 @@ class TimeSeriesModel:
                         break
 
         return loss_history
+
 
     def get_model_details(self):
         """
@@ -113,7 +119,7 @@ class TimeSeriesModel:
 
     def evaluate(self, test_loader, report_path="report", additional_info=None):
         """
-        모델 평가 함수 (평가 결과를 누적 저장, Adjusted R² 지원)
+        모델 평가 함수 (회귀 문제에 적합, MSE 기반)
         :param test_loader: PyTorch DataLoader 객체 (테스트 데이터)
         :param report_path: 평가 결과를 저장할 폴더 경로
         :param additional_info: 추가 정보 (파라미터, 배치 크기 등) 딕셔너리
@@ -121,25 +127,31 @@ class TimeSeriesModel:
         """
         self.model.eval()
         y_true, y_pred = [], []
+
         with torch.no_grad():
             for inputs, targets in test_loader:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = self.model(inputs)
-                y_pred.extend(outputs.squeeze().cpu().numpy())
+                outputs = self.model(inputs)  # 모델 예측
+                y_pred.extend(outputs.cpu().numpy())
                 y_true.extend(targets.cpu().numpy())
 
-        # 성능 지표 계산
+        # NumPy 배열로 변환
+        y_true = np.array(y_true).flatten()
+        y_pred = np.array(y_pred).flatten()
+
+        # 성능 평가
         mse = mean_squared_error(y_true, y_pred)
         r2 = r2_score(y_true, y_pred)
 
         # 조정된 R² 계산
         n = len(y_true)  # 샘플 수
-        k = inputs.size(-1)  # 입력 변수(특성) 수
+        k = test_loader.dataset[0][0].shape[-1]  # 입력 변수(특성) 수
         adjusted_r2 = 1 - ((1 - r2) * (n - 1) / (n - k - 1))
 
+        # 평가 결과 출력
         print(f"Mean Squared Error: {mse:.4f}")
-        print(f"R2 Score: {r2:.4f}")
-        print(f"Adjusted R2 Score: {adjusted_r2:.4f}")
+        print(f"R² Score: {r2:.4f}")
+        print(f"Adjusted R² Score: {adjusted_r2:.4f}")
 
         # 보고서 파일 경로
         os.makedirs(report_path, exist_ok=True)
@@ -155,13 +167,13 @@ class TimeSeriesModel:
             "evaluation_metrics": {
                 "mean_squared_error": mse,
                 "r2_score": r2,
-                "adjusted_r2_score": adjusted_r2
+                "adjusted_r2_score": adjusted_r2,
             },
             "model_parameters": {
                 "total_params": model_params,
-                "layer_details": self.get_model_details()
+                "layer_details": self.get_model_details(),
             },
-            "additional_info": additional_info or {}
+            "additional_info": additional_info or {},
         }
 
         # 기존 보고서 읽기 (없으면 빈 리스트 생성)
