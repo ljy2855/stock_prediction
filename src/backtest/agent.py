@@ -12,7 +12,7 @@ class BacktestAgent:
     def __init__(
         self, model, price_data, feature_data, date_data,
         n_steps=30, initial_balance=10000, signal_threshold=0.1,
-        risk_tolerance=1.5, report_dir="reports"
+        risk_tolerance=1.5, report_dir="reports", transaction_cost=0.0001
     ):
         """
         BacktestAgent 초기화.
@@ -26,6 +26,7 @@ class BacktestAgent:
         self.signal_threshold = signal_threshold
         self.risk_tolerance = risk_tolerance
         self.report_dir = report_dir
+        self.transaction_cost = transaction_cost
         self.results = None
         self.total_return = None
         self.final_portfolio_value = None
@@ -65,7 +66,7 @@ class BacktestAgent:
                 trades.append({"Date": self.date_data[i], "Price": price, "Type": "BUY"})
 
             elif signal < 0 and position > 0:  # SELL
-                balance = position * price
+                balance = position * price * (1 - self.transaction_cost)
                 position = 0
                 trades.append({"Date": self.date_data[i], "Price": price, "Type": "SELL"})
 
@@ -116,17 +117,74 @@ class BacktestAgent:
 
         print(f"Report saved successfully at: {report_path}")
 
+    def show_plot(self):
+        """
+        백테스트 결과 그래프를 시각화합니다.
+        """
+        fig, ax1 = plt.subplots(figsize=(12, 6))
+
+        initial_price = self.results["Price"].iloc[0]
+        scaled_portfolio = self.results["Portfolio Value"] / self.results["Portfolio Value"].iloc[0] * initial_price
+
+        # 주가 그래프
+        self.results["Date"] = pd.to_datetime(self.results["Date"])
+        ax1.plot(self.results["Date"], self.results["Price"], label="Stock Price", color="orange", linewidth=2)
+        ax1.plot(self.results["Date"], scaled_portfolio, label="Portfolio Value (Scaled)", color="blue", linewidth=2)
+
+        # 거래 마커
+        buy_label_shown = False
+        sell_label_shown = False
+        for _, trade in self.trades.iterrows():
+            color = "green" if trade["Type"] == "BUY" else "red"
+            marker = "^" if trade["Type"] == "BUY" else "v"
+            if trade["Type"] == "BUY" and not buy_label_shown:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker, label="BUY")
+                buy_label_shown = True
+            elif trade["Type"] == "SELL" and not sell_label_shown:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker, label="SELL")
+                sell_label_shown = True
+            else:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker)
+
+
+        ax1.set_title("Backtest Results")
+        ax1.set_xlabel("Date")
+        ax1.set_ylabel("Normalized Value")
+        ax1.legend()
+        ax1.grid()
+
+        plt.tight_layout()
+        plt.show()
+
     def _save_plot(self, report_path):
         """
         그래프 저장.
         """
         fig, ax1 = plt.subplots(figsize=(12, 6))
-        
-        normalized_price = self.results["Price"] / self.results["Price"].iloc[0]
-        normalized_portfolio = self.results["Portfolio Value"] / self.results["Portfolio Value"].iloc[0]
 
-        ax1.plot(self.results["Date"], normalized_price, label="Stock Price", color="orange", linewidth=2)
-        ax1.plot(self.results["Date"], normalized_portfolio, label="Portfolio Value", color="blue", linewidth=2)
+        initial_price = self.results["Price"].iloc[0]
+        scaled_portfolio = self.results["Portfolio Value"] / self.results["Portfolio Value"].iloc[0] * initial_price
+
+        # 주가 그래프
+        self.results["Date"] = pd.to_datetime(self.results["Date"])
+        ax1.plot(self.results["Date"], self.results["Price"], label="Stock Price", color="orange", linewidth=2)
+        ax1.plot(self.results["Date"], scaled_portfolio, label="Portfolio Value (Scaled)", color="blue", linewidth=2)
+
+        # 거래 마커
+        buy_label_shown = False
+        sell_label_shown = False
+        for _, trade in self.trades.iterrows():
+            color = "green" if trade["Type"] == "BUY" else "red"
+            marker = "^" if trade["Type"] == "BUY" else "v"
+            if trade["Type"] == "BUY" and not buy_label_shown:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker, label="BUY")
+                buy_label_shown = True
+            elif trade["Type"] == "SELL" and not sell_label_shown:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker, label="SELL")
+                sell_label_shown = True
+            else:
+                ax1.scatter(trade["Date"], trade["Price"], color=color, s=50, marker=marker)
+
 
         ax1.set_title("Backtest Results")
         ax1.set_xlabel("Date")
