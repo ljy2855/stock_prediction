@@ -130,3 +130,43 @@ def prepare_inference_input(n_steps, data_path=None):
         raise ValueError(f"데이터의 길이가 n_steps({n_steps})보다 적습니다.")
     input_seq = X_scaled[-n_steps:]  # 최근 n_steps 시퀀스 사용
     return torch.tensor(input_seq, dtype=torch.float32).unsqueeze(0)  # (1, n_steps, input_size)
+
+def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_date=None, duration=None):
+    """
+    백테스트를 위한 데이터를 준비합니다.
+    :param data_path: 데이터 경로
+    :param start_date: 백테스트 시작 날짜
+    :param duration: 백테스트 기간 (일 단위)
+    :return: 가격 데이터, 특성 데이터, 날짜 데이터
+    """
+    # 경제 데이터 로드
+    test_data = pd.read_csv(data_path)
+
+    if test_data is None or test_data.empty:
+        raise ValueError("데이터가 존재하지 않습니다.")
+
+    # 날짜 정렬
+    test_data["Date"] = pd.to_datetime(test_data["Date"])
+    test_data = test_data.sort_values(by="Date")
+
+
+    # 기간 필터링
+    if start_date is None or duration is None:
+        duration = 365
+        random_start_idx = np.random.randint(0, len(test_data) - duration)  # 시작점 
+        test_data = test_data.iloc[random_start_idx:random_start_idx + duration]  
+    else:
+        start_date = pd.to_datetime(start_date)
+        test_data = test_data[test_data['Date'] >= start_date]
+        test_data = test_data[test_data['Date'] < start_date + pd.Timedelta(days=duration)]
+
+    if test_data.empty:
+        raise ValueError("선택된 기간에 해당하는 데이터가 없습니다.")
+
+    # 필요한 데이터 추출
+    price_data = test_data["Price"].values  # 종가 데이터
+    feature_data = test_data[INPUT_VAR].values  # 특성 데이터
+    date_data = test_data["Date"].values  # 날짜 데이터
+
+    print(f"선택된 데이터 기간: {test_data['Date'].iloc[0]} ~ {test_data['Date'].iloc[-1]}")
+    return price_data, feature_data, date_data
