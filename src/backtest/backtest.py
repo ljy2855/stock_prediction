@@ -49,7 +49,7 @@ def backtest(
             avg_signal = np.mean(scaled_values)  # 평균값 계산
 
             # 신호 생성 기준 조정
-            signal = 1 if avg_signal > 0.01 else -1 if avg_signal < -0.01 else 0  # 기준에 따라 신호 결정
+            signal = 1 if avg_signal > 0.02 else -1 if avg_signal < -0.02 else 0  # 기준에 따라 신호 결정
         except Exception as e:
             print(f"Error during inference at index {i}: {e}")
             signals.append(0)  # 신호 생성 실패 시 중립 유지
