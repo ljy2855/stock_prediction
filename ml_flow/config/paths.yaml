@@ -1,0 +1,16 @@
+paths:
+  raw_data:
+    stock_data: "data/raw/stock_data"
+    news_data: "data/raw/news_data"
+    tweet_data: "data/raw/tweet_data"
+    economic_data: "data/raw/economic_data"
+  processed_data:
+    stock_data: "data/processed/"
+    news_with_sentiment: "data/processed/news_with_sentiment/"
+    tweets_with_sentiment: "data/processed/tweets_with_sentiment/"
+    merged_data: "data/processed/merged_data.csv"
+  logs:
+    log_file: "logs/data_pipeline.log"
+  output:
+    model_results: "results/model_results/"
+    backtest_results: "results/backtest_results/"
