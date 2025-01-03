@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import uuid4
 import torch
 import torch.nn as nn
@@ -7,6 +8,7 @@ import os
 import json
 from tqdm import tqdm
 import numpy as np
+from .mlflow_logging import mlflow_log_evaluation, mlflow_log_training
 
 class TimeSeriesModel:
     def __init__(self, model, lr=0.001, model_name="Model"):
@@ -18,13 +20,13 @@ class TimeSeriesModel:
         :param lr: 학습률
         :param model_name: 모델 이름 (저장 파일명)
         """
-        self.model_name = model_name
-        self.id = uuid4().hex
+        self.model_name = model_name + datetime.now().strftime("_%Y%m%d_%H%M%S")
         self.device = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
+    @mlflow_log_training
     def train(self, train_loader, num_epochs=50, verbose=True, early_stopping=False, patience=10):
         """
         모델 훈련 함수
@@ -117,7 +119,8 @@ class TimeSeriesModel:
             layer_details['bias'] = False
         return layer_details
 
-    def evaluate(self, test_loader, report_path="report", additional_info=None):
+    @mlflow_log_evaluation
+    def evaluate(self, test_loader, additional_info=None):
         """
         모델 평가 함수 (회귀 문제에 적합, MSE 기반)
         :param test_loader: PyTorch DataLoader 객체 (테스트 데이터)
@@ -153,9 +156,6 @@ class TimeSeriesModel:
         print(f"R² Score: {r2:.4f}")
         print(f"Adjusted R² Score: {adjusted_r2:.4f}")
 
-        # 보고서 파일 경로
-        os.makedirs(report_path, exist_ok=True)
-        report_file = os.path.join(report_path, "evaluation_results.json")
 
         # 모델 파라미터 가져오기
         model_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
@@ -163,7 +163,6 @@ class TimeSeriesModel:
         # 새 평가 결과
         new_entry = {
             "model_name": self.model_name,
-            "model_id": self.id,
             "evaluation_metrics": {
                 "mean_squared_error": mse,
                 "r2_score": r2,
@@ -176,29 +175,4 @@ class TimeSeriesModel:
             "additional_info": additional_info or {},
         }
 
-        # 기존 보고서 읽기 (없으면 빈 리스트 생성)
-        if os.path.exists(report_file):
-            with open(report_file, "r") as f:
-                existing_data = json.load(f)
-        else:
-            existing_data = []
-
-        # 새 데이터를 기존 데이터에 추가
-        existing_data.append(new_entry)
-
-        # 업데이트된 데이터를 저장
-        with open(report_file, "w") as f:
-            json.dump(existing_data, f, indent=4)
-
-        print(f"Evaluation report updated at {report_file}")
         return mse, r2, adjusted_r2
-
-
-    def save_model(self, save_path="models"):
-        """
-        모델 저장 함수
-        :param save_path: 모델 파일 저장 경로
-        """
-        os.makedirs(save_path, exist_ok=True)
-        torch.save(self.model.state_dict(), f"{save_path}/{self.model_name}_{self.id}.pth")
-        print(f"Model saved to {save_path}/{self.model_name}.pth")

@@ -53,18 +53,7 @@ if __name__ == "__main__":
     trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Transformer")
 
     # 훈련 및 평가
-    trainer.train(train_loader, num_epochs=100, verbose=True, early_stopping=True, patience=10)
-    trainer.evaluate(test_loader)
+    with mlflow.start_run(run_name=trainer.model_name):
+        trainer.train(train_loader, num_epochs=10, verbose=True, early_stopping=True, patience=10)
+        trainer.evaluate(test_loader)
 
-    sample_input, _ = test_loader.dataset[0]
-    sample_input = sample_input.unsqueeze(0).to(trainer.device)  # 배치 형태로 변환
-    model_output = trainer.model(sample_input).detach().cpu().numpy()
-
-    signature = infer_signature(sample_input.cpu().numpy(), model_output)
-
-    mlflow.pytorch.log_model(
-        pytorch_model=trainer.model,
-        artifact_path="transformer-model",
-        signature=signature,
-        registered_model_name="pytorch-transformer-time-series-model"
-    )
