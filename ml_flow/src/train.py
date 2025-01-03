@@ -1,13 +1,22 @@
 from datetime import datetime
 
+import mlflow
+import mlflow.transformers
+from mlflow.models import infer_signature
+import mlflow.pytorch
+
 from data_processing.prepare_data import prepare_data_for_sequences
 from data_processing.stock_data import download_stock_data
 from data_processing.fred_data import download_economic_data
 from data_processing.transform_data import merge_data
 from model.base import TimeSeriesModel
-from model.lstm import LSTMModel
 from model.transformer import TransformerTimeSeriesModel
 from utils.config import config
+
+
+mlflow.set_tracking_uri("http://localhost:5001")
+mlflow.set_experiment("TimeSeriesModel_Experiment")
+mlflow.autolog()  # PyTorch 자동 로깅 활성화
 
 START_DATE = "2015-01-01"
 TICKER = "SPY"
@@ -30,13 +39,14 @@ def init_data():
 if __name__ == "__main__":
     # init_data()
 
+
     train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
 
     # Transformer 모델 초기화
     input_size = 8  # 입력 feature 수
     d_model = 128   # 임베딩 차원
     nhead = 4       # 멀티헤드 어텐션 수
-    num_layers = 6  # Transformer 레이어 수
+    num_layers = 8  # Transformer 레이어 수
     forecast_steps = 30  # 예측 벡터 크기
 
     transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, forecast_steps)
@@ -45,4 +55,16 @@ if __name__ == "__main__":
     # 훈련 및 평가
     trainer.train(train_loader, num_epochs=100, verbose=True, early_stopping=True, patience=10)
     trainer.evaluate(test_loader)
-    trainer.save_model()
+
+    sample_input, _ = test_loader.dataset[0]
+    sample_input = sample_input.unsqueeze(0).to(trainer.device)  # 배치 형태로 변환
+    model_output = trainer.model(sample_input).detach().cpu().numpy()
+
+    signature = infer_signature(sample_input.cpu().numpy(), model_output)
+
+    mlflow.pytorch.log_model(
+        pytorch_model=trainer.model,
+        artifact_path="transformer-model",
+        signature=signature,
+        registered_model_name="pytorch-transformer-time-series-model"
+    )
