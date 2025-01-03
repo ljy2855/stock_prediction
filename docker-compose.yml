@@ -1,37 +1,34 @@
 version: "3.8"
 
 services:
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
+  # 1. MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    container_name: mlflow_tracking_server
     ports:
-      - "8086:8086"
-    environment:
-      - INFLUXDB_DB=stock_db
+      - "5001:5000"
     volumes:
-      - ./data/influxdb:/var/lib/influxdb
+      - ./mlartifacts:/mlartifacts
+      - ./mlflow_db:/mlflow/db
+    entrypoint: >
+      mlflow server 
+      --backend-store-uri sqlite:///mlflow/db/mlflow.db 
+      --host 0.0.0.0 
+      --port 5000
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    restart: unless-stopped
 
-  python_app:
+  # 2. FastAPI Model Serving Server
+  fastapi_serving:
     build:
-      context: .
-      dockerfile: docker/Dockerfile
-    container_name: stock_prediction_app
-    volumes:
-      - ./src:/app/src
-    depends_on:
-      - influxdb
-    environment:
-      - INFLUXDB_URL=http://influxdb:8086
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
+      context: ./model_serve
+      dockerfile: Dockerfile
+    container_name: fastapi_model_server
     ports:
-      - "3000:3000"  # Grafana 웹 대시보드 포트
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - "8000:8000"
     depends_on:
-      - influxdb
+      - mlflow
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    restart: unless-stopped
