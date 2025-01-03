@@ -1,0 +1,5 @@
+# Project
+data/raw/
+data/processed/
+models/*
+reports/*
