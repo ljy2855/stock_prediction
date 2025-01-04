@@ -54,7 +54,9 @@ class BacktestAgent:
 
         for i in range(self.n_steps, len(self.price_data)):
             input_sequence = torch.tensor(self.feature_data[i-self.n_steps:i], dtype=torch.float32).unsqueeze(0)
-            signal_value = self.model.inference(input_sequence)
+            input_sequence = input_sequence.numpy()
+            
+            signal_value = self.model.predict(input_sequence)
             signal = self._generate_signal(signal_value)
 
             signals.append(signal)

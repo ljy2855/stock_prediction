@@ -1,30 +1,29 @@
 import torch
 from model.transformer import TransformerTimeSeriesModel
+
 import pandas as pd
 
-# Step 1: Initialize and load Transformer model
-input_size = 8
-d_model = 128
-nhead = 4
-num_layers = 6
-output_size = 30
-model_path = "models/Transformer_2d3da52c42714d09966f4533c87c490c.pth"
+# Step 2: Initialize and load Transformer model
+import os
+import mlflow
 
-model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, output_size)
-model.load_state_dict(torch.load(model_path))
-model.eval()
+os.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
+
+model_name = "pytorch-transformer-time-series-model"
+version = 8
+
+model_uri = f"models:/{model_name}/{version}"
+print(f"ℹ️ Loading model from URI: {model_uri}")
+model = mlflow.pyfunc.load_model(model_uri)
 
 print("Model loaded successfully")
 
-# Step 2: Load historical test data for backtesting
+# Step 3: Perform predictions on historical data
 from data_processing.prepare_data import prepare_backtest_input
 
-import numpy as np
+price_data, feature_data, date_data = prepare_backtest_input("data/processed/merged_data.csv")
 
-
-price_data, feature_data, date_data = prepare_backtest_input()
-
-# Step 3: Run backtest
+# Step 5: Run backtest
 from backtest.agent import BacktestAgent
 
 initial_balance = price_data[0]
@@ -38,10 +37,11 @@ agent = BacktestAgent(
     date_data=date_data,
     n_steps=n_steps,
     initial_balance=initial_balance,
-    signal_threshold=0.03,
+    transaction_cost=0.001,
+    signal_threshold=0.01,
+    risk_tolerance=0.3,
 )
 
 agent.run()
 
-# Step 4: Visualize backtest results
 agent.show_plot()
