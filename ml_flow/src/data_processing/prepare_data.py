@@ -35,7 +35,7 @@ def create_labels(price_data, window=20, threshold=0.01):
     return labels
 
 
-def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64):
+def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64, d_model=8):
     """
     데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환. 타겟은 다음 forecast_steps 동안의 누적 주가 변동률 벡터로 설정.
     :param merged_data: 병합된 데이터 (DataFrame)
@@ -86,21 +86,45 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
     X_train_seq, y_train_seq = create_sequences(X_train, y_train, n_steps)
     X_test_seq, y_test_seq = create_sequences(X_test, y_test, n_steps)
 
+
+    def add_positional_encoding(tensor, d_model):
+        """
+        입력 텐서에 위치 인코딩 추가
+        :param tensor: [batch_size, seq_len, d_model]
+        :param d_model: 모델의 임베딩 차원
+        :return: 위치 인코딩이 추가된 텐서
+        """
+        seq_len = tensor.size(1)
+        position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        
+        pe = torch.zeros(seq_len, d_model)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # 배치 차원 추가
+        
+        return tensor + pe.to(tensor.device)
+
+
     # PyTorch Dataset 객체 생성
     class TimeSeriesDataset(Dataset):
-        def __init__(self, X, y):
+        def __init__(self, X, y, d_model):
             self.X = torch.tensor(X, dtype=torch.float32)
             self.y = torch.tensor(y, dtype=torch.float32)
+            self.d_model = d_model
         
         def __len__(self):
             return len(self.X)
         
         def __getitem__(self, idx):
-            return self.X[idx], self.y[idx]
+            seq = self.X[idx]
+            seq = seq.unsqueeze(0)  # 배치 차원 추가
+            seq = add_positional_encoding(seq, self.d_model)
+            return seq.squeeze(0), self.y[idx]
 
     # Dataset과 DataLoader 생성
-    train_dataset = TimeSeriesDataset(X_train_seq, y_train_seq)
-    test_dataset = TimeSeriesDataset(X_test_seq, y_test_seq)
+    train_dataset = TimeSeriesDataset(X_train_seq, y_train_seq, d_model)
+    test_dataset = TimeSeriesDataset(X_test_seq, y_test_seq, d_model)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
