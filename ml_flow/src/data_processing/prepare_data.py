@@ -155,7 +155,7 @@ def prepare_inference_input(n_steps, data_path=None):
     input_seq = X_scaled[-n_steps:]  # 최근 n_steps 시퀀스 사용
     return torch.tensor(input_seq, dtype=torch.float32).unsqueeze(0)  # (1, n_steps, input_size)
 
-def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_date=None, duration=None):
+def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_date=None, duration=365):
     """
     백테스트를 위한 데이터를 준비합니다.
     :param data_path: 데이터 경로
@@ -175,8 +175,7 @@ def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_dat
 
 
     # 기간 필터링
-    if start_date is None or duration is None:
-        duration = 365
+    if start_date is None:
         random_start_idx = np.random.randint(0, len(test_data) - duration)  # 시작점 
         test_data = test_data.iloc[random_start_idx:random_start_idx + duration]  
     else:
@@ -194,3 +193,21 @@ def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_dat
 
     print(f"선택된 데이터 기간: {test_data['Date'].iloc[0]} ~ {test_data['Date'].iloc[-1]}")
     return price_data, feature_data, date_data
+
+def prepare_transformer_input(feature_data, n_steps=30):
+    """
+    Transformer 입력으로 사용할 수 있도록 데이터를 시퀀스로 변환합니다.
+    :param feature_data: 특성 데이터 (numpy.ndarray)
+    :param n_steps: 시퀀스 길이
+    :return: Transformer 입력 데이터 (torch.Tensor)
+    """
+    sequences = []
+    for i in range(len(feature_data) - n_steps + 1):
+        seq = feature_data[i:i + n_steps]  # 30일 분량 추출
+        sequences.append(seq)
+    
+    sequences = np.array(sequences)  # (batch_size, seq_len, feature_dim)
+    input_tensor = torch.tensor(sequences, dtype=torch.float32)
+    
+    print(f"Transformer Input Shape: {input_tensor.shape}")  # (batch_size, seq_len, feature_dim)
+    return input_tensor

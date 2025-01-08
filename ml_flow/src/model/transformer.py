@@ -20,18 +20,3 @@ class TransformerTimeSeriesModel(nn.Module):
         x = x[:, -1, :]  # 마지막 타임스텝 사용
         x = self.output_layer(x)  # (batch_size, forecast_steps)
         return x
-
-    def inference(self, sequence):
-        """
-        새로운 시퀀스에 대한 Inference 수행.
-        :param sequence: (seq_len, input_size) 형태의 입력 시퀀스 (단일 샘플)
-        :return: 모델 예측값 (float)
-        """
-        self.eval()  # 평가 모드 설정
-        with torch.no_grad():
-            if len(sequence.shape) == 2:
-                sequence = sequence.unsqueeze(0)  # 배치 차원 추가: (1, seq_len, input_size)
-            
-            sequence = sequence.to(self.device)  # 입력 데이터를 GPU로 이동
-            prediction = self(sequence)  # (1, output_size)
-            return prediction.cpu().numpy().flatten()
