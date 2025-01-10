@@ -19,4 +19,5 @@ class TransformerTimeSeriesModel(nn.Module):
         x = self.transformer_encoder(x)  # (batch_size, seq_len, d_model)
         x = x[:, -1, :]  # 마지막 타임스텝 사용
         x = self.output_layer(x)  # (batch_size, forecast_steps)
+        
         return x

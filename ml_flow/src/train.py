@@ -6,7 +6,7 @@ import mlflow.pytorch
 
 from data_processing.prepare_data import prepare_data_for_sequences
 from model.base import TimeSeriesModel
-from model.transformer import TransformerTimeSeriesModel
+from model.adaptive_transformer import TransformerTimeSeriesModel
 from utils.config import config
 
 
@@ -16,19 +16,24 @@ mlflow.autolog()  # PyTorch 자동 로깅 활성화
 
 if __name__ == "__main__":
 
+    n_steps=14 # 14일 데이터
+    forecast_steps=3 # 7일 뒤의 데이터 예측
+    batch_size=16
+
+    train_loader, test_loader = prepare_data_for_sequences(n_steps=n_steps, batch_size=batch_size,forecast_steps=forecast_steps)
+
+
     # Transformer 모델 초기화
-    input_size = 8  # 입력 feature 수
-    d_model = 128   # 임베딩 차원
-    nhead = 4       # 멀티헤드 어텐션 수
-    num_layers = 8  # Transformer 레이어 수
-    forecast_steps = 30  # 예측 벡터 크기
+    input_size = 4  # 입력 feature 수
+    d_model = 256   # 임베딩 차원
+    nhead = 8       # 멀티헤드 어텐션 수
+    num_layers = 16  # Transformer 레이어 수
+    output_dimension = 1  # 예측 벡터 크기
 
-    train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64,forecast_steps=forecast_steps)
-
-    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, forecast_steps)
+    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, output_dimension)
     trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Adaptive_Transformer")
 
     # 훈련 및 평가
     with mlflow.start_run(run_name=trainer.model_name):
-        trainer.train(train_loader, num_epochs=20, verbose=True, early_stopping=True, patience=2)
-        trainer.evaluate(test_loader)
+        trainer.train(train_loader, num_epochs=3, verbose=True, early_stopping=True, patience=10)
+        trainer.evaluate(test_loader,window_size=n_steps)

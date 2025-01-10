@@ -15,59 +15,53 @@ class TimeSeriesModel:
         """
         TimeSeriesModel 클래스를 초기화합니다.
         :param model: PyTorch 모델 객체
-        :param input_size: 입력 특성 크기
-        :param output_size: 출력 크기
         :param lr: 학습률
         :param model_name: 모델 이름 (저장 파일명)
         """
         self.model_name = model_name + datetime.now().strftime("_%Y%m%d_%H%M%S")
         self.device = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
     @mlflow_log_training
     def train(self, train_loader, num_epochs=50, verbose=True, early_stopping=False, patience=10):
-        """
-        모델 훈련 함수
-        :param train_loader: PyTorch DataLoader 객체 (훈련 데이터)
-        :param num_epochs: 학습 반복 횟수
-        :param verbose: 학습 로그 출력 여부
-        :param early_stopping: 조기 종료 여부
-        :param patience: 조기 종료를 위한 허용 에포크 수
-        :return: 학습 손실 기록
-        """
         self.model.train()
         best_loss = float('inf')
         epochs_no_improve = 0
         loss_history = []
 
+        scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)  # 학습률 스케줄러 추가
+
         for epoch in range(num_epochs):
             epoch_loss = 0.0
+
             with tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}]", unit="batch") as tepoch:
                 for inputs, targets in tepoch:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
                     
                     # Forward 및 Backward
                     self.optimizer.zero_grad()
-                    outputs = self.model(inputs)  # (batch_size, forecast_steps)
-                    loss = self.criterion(outputs, targets)  # MSE 또는 CrossEntropy
+                    outputs = self.model(inputs)
+                    loss = self.criterion(outputs, targets)
                     loss.backward()
                     self.optimizer.step()
+                    epoch_loss += loss.item()
+                    tepoch.set_postfix(batch_loss=loss.item())
+                    
+                    # 출력 디버깅 (선택)
+                    if epoch % 10 == 0:
+                        print(f"Sample prediction: {outputs[0].item()}, Target: {targets[0].item()}")
+                    
+                scheduler.step()  # 학습률 업데이트
 
-                    # 배치 손실 기록 및 출력
-                    batch_loss = loss.item()
-                    epoch_loss += batch_loss
-                    tepoch.set_postfix(batch_loss=batch_loss)
-
-            # 에포크 평균 손실 계산
             epoch_loss /= len(train_loader)
             loss_history.append(epoch_loss)
 
             if verbose:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {epoch_loss:.4f}")
 
-            # 조기 종료 로직
+            # Early Stopping
             if early_stopping:
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
@@ -79,6 +73,7 @@ class TimeSeriesModel:
                         break
 
         return loss_history
+
 
 
     def get_model_details(self):
@@ -120,12 +115,13 @@ class TimeSeriesModel:
         return layer_details
 
     @mlflow_log_evaluation
-    def evaluate(self, test_loader, additional_info=None):
+    def evaluate(self, test_loader, additional_info=None, window_size=30):
         """
         모델 평가 함수 (회귀 문제에 적합, MSE 기반)
+        데이터를 30일 단위로 슬라이싱하여 평가.
         :param test_loader: PyTorch DataLoader 객체 (테스트 데이터)
-        :param report_path: 평가 결과를 저장할 폴더 경로
         :param additional_info: 추가 정보 (파라미터, 배치 크기 등) 딕셔너리
+        :param window_size: 슬라이싱할 창 크기 (기본값: 30일)
         :return: MSE, R², Adjusted R² 점수
         """
         self.model.eval()
@@ -134,9 +130,20 @@ class TimeSeriesModel:
         with torch.no_grad():
             for inputs, targets in test_loader:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = self.model(inputs)  # 모델 예측
-                y_pred.extend(outputs.cpu().numpy())
-                y_true.extend(targets.cpu().numpy())
+
+                # 30일 단위로 슬라이싱
+                batch_size, seq_len, num_features = inputs.shape
+                for start_idx in range(0, seq_len - window_size + 1, window_size):
+                    end_idx = start_idx + window_size
+                    input_slice = inputs[:, start_idx:end_idx, :]  # 30일 단위 슬라이싱
+                    target_slice = targets  # 전체 타겟 값
+
+                    # 모델 예측
+                    outputs = self.model(input_slice)
+                    print(outputs.shape)
+                    print(outputs.cpu().numpy())
+                    y_pred.extend(outputs.cpu().numpy())
+                    y_true.extend(target_slice.cpu().numpy())
 
         # NumPy 배열로 변환
         y_true = np.array(y_true).flatten()
@@ -156,23 +163,5 @@ class TimeSeriesModel:
         print(f"R² Score: {r2:.4f}")
         print(f"Adjusted R² Score: {adjusted_r2:.4f}")
 
-
-        # 모델 파라미터 가져오기
-        model_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-
-        # 새 평가 결과
-        new_entry = {
-            "model_name": self.model_name,
-            "evaluation_metrics": {
-                "mean_squared_error": mse,
-                "r2_score": r2,
-                "adjusted_r2_score": adjusted_r2,
-            },
-            "model_parameters": {
-                "total_params": model_params,
-                "layer_details": self.get_model_details(),
-            },
-            "additional_info": additional_info or {},
-        }
-
         return mse, r2, adjusted_r2
+
