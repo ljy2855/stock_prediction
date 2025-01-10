@@ -12,7 +12,7 @@ os.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
 
 # 모델 로드
 model_name = "pytorch-transformer-time-series-model"
-version = 10
+version = "latest"
 model_uri = f"models:/{model_name}/{version}"
 print(f"Loading model from URI: {model_uri}")
 model = mlflow.pyfunc.load_model(model_uri)

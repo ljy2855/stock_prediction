@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 from data_processing.prepare_data import prepare_backtest_input
 
@@ -12,7 +11,7 @@ os.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
 
 # 모델 로드
 model_name = "pytorch-transformer-time-series-model"
-version = 10
+version = "latest"
 model_uri = f"models:/{model_name}/{version}"
 print(f"Loading model from URI: {model_uri}")
 model = mlflow.pyfunc.load_model(model_uri)
@@ -32,16 +31,24 @@ def evaluate_signal_with_trend(input_sequence, feature_data, price_data, start_i
     # 임계값 설정
     BUY_THRESHOLD = 0.007
     SELL_THRESHOLD = -0.002
+
+    print("Input Sequence Shape:", input_sequence.shape)
+    print("First Sequence Example:\n", input_sequence[0])
+    print("Mean of Sequence:", np.mean(input_sequence))
+    print("Std of Sequence:", np.std(input_sequence))
     
     for day in range(forecast_days):
         input_tensor = torch.tensor(current_sequence, dtype=torch.float32).unsqueeze(0)  # (1, 30, feature_dim)
+        input_tensor = input_tensor.cpu().numpy()
+
+        # 예측 수행
+        prediction_vector = model.predict(input_tensor)
+        prediction_vector = prediction_vector.flatten()
+        print("Prediction Vector:", prediction_vector)
         
-        # 하루 예측 수행
-        prediction_vector = model.predict(input_tensor.numpy())  # (1, 30)
         prediction_vector = prediction_vector.flatten()  # (30,)
         mean_prediction = np.mean(prediction_vector)  # 평균 예상 수익률
-
-        print(f"Day {day + 1} - Mean Prediction: {mean_prediction:.4f}")
+        
         # 결과 기록
         prediction_vectors.append(prediction_vector)
         mean_predictions.append(mean_prediction)

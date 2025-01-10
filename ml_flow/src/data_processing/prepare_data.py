@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
+
 INPUT_VAR = ['FEDFUNDS', 'CPIAUCNS', 'Close', 'Volume', 'High', 'Low', 'Open', 'Price']
 
 def create_labels(price_data, window=20, threshold=0.01):
@@ -37,123 +38,66 @@ def create_labels(price_data, window=20, threshold=0.01):
 
 def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64, d_model=8):
     """
-    데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환. 타겟은 다음 forecast_steps 동안의 누적 주가 변동률 벡터로 설정.
-    :param merged_data: 병합된 데이터 (DataFrame)
-    :param n_steps: 입력 시퀀스 길이 (과거 n_steps 사용)
-    :param forecast_steps: 예측할 기간 길이 (다음 forecast_steps 동안의 누적 변동률)
-    :param batch_size: DataLoader의 배치 크기
-    :return: PyTorch DataLoader (train_loader, test_loader)
+    데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환.
     """
     if merged_data is None:
-        # 경제 데이터 로드
         merged_data = pd.read_csv('data/processed/merged_data.csv', index_col=0)
-
-    # 타겟 변수: 다음 forecast_steps 동안의 누적 변동률
+    
+    # ✅ Target Momentum 생성
     price = merged_data['Price'].values
-    target_momentum = [
-        (price[i + 1:i + 1 + forecast_steps] - price[i]) / price[i]
-        if i + 1 + forecast_steps <= len(price) else np.zeros(forecast_steps)
-        for i in range(len(price))
-    ]
+    target_momentum = np.zeros(len(price))
+    for i in range(len(price) - forecast_steps):
+        target_momentum[i] = (price[i + forecast_steps] - price[i]) / price[i]
     merged_data['Target_Momentum'] = target_momentum
 
-    # 결측값 제거
+    # ✅ 결측값 제거
     merged_data = merged_data.dropna()
 
-    # 특성 변수와 타겟 변수 분리
+    # ✅ 특성 및 타겟 분리
     X = merged_data[INPUT_VAR].values
-    y = np.vstack(merged_data['Target_Momentum'].values)  # 벡터 형태로 타겟 변환
+    y = merged_data['Target_Momentum'].values.reshape(-1, 1)
 
-    # 데이터 정규화 (Standard Scaling)
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    # ✅ Scaler 학습 및 저장
 
-    # 훈련/테스트 분할
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, shuffle=False)
-
+    # ✅ 데이터 분할
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
     print(f"y_train shape: {y_train.shape}, y_test shape: {y_test.shape}")
-    # 시퀀스 데이터 생성 함수
+    
+    # ✅ 시퀀스 데이터 생성 함수
     def create_sequences(X, y, n_steps):
         sequences_X, sequences_y = [], []
-        for i in range(len(X) - n_steps):
+        seq_length = min(len(X), len(y)) - n_steps
+        for i in range(seq_length):
             seq_X = X[i:i + n_steps]
-            seq_y = y[i + n_steps - 1]  # 시퀀스의 마지막 지점에서 타겟 시작
+            seq_y = y[i + n_steps - 1]
             sequences_X.append(seq_X)
             sequences_y.append(seq_y)
         return np.array(sequences_X), np.array(sequences_y)
 
-    # 시퀀스 데이터 생성
     X_train_seq, y_train_seq = create_sequences(X_train, y_train, n_steps)
     X_test_seq, y_test_seq = create_sequences(X_test, y_test, n_steps)
+    print(f"Train Sequence Shape: {X_train_seq.shape}, Test Sequence Shape: {X_test_seq.shape}")
 
-
-    def add_positional_encoding(tensor, d_model):
-        """
-        입력 텐서에 위치 인코딩 추가
-        :param tensor: [batch_size, seq_len, d_model]
-        :param d_model: 모델의 임베딩 차원
-        :return: 위치 인코딩이 추가된 텐서
-        """
-        seq_len = tensor.size(1)
-        position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
-        
-        pe = torch.zeros(seq_len, d_model)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)  # 배치 차원 추가
-        
-        return tensor + pe.to(tensor.device)
-
-
-    # PyTorch Dataset 객체 생성
+    # ✅ PyTorch Dataset
     class TimeSeriesDataset(Dataset):
-        def __init__(self, X, y, d_model):
+        def __init__(self, X, y):
             self.X = torch.tensor(X, dtype=torch.float32)
             self.y = torch.tensor(y, dtype=torch.float32)
-            self.d_model = d_model
         
         def __len__(self):
             return len(self.X)
         
         def __getitem__(self, idx):
-            seq = self.X[idx]
-            seq = seq.unsqueeze(0)  # 배치 차원 추가
-            seq = add_positional_encoding(seq, self.d_model)
-            return seq.squeeze(0), self.y[idx]
+            return self.X[idx], self.y[idx]
 
-    # Dataset과 DataLoader 생성
-    train_dataset = TimeSeriesDataset(X_train_seq, y_train_seq, d_model)
-    test_dataset = TimeSeriesDataset(X_test_seq, y_test_seq, d_model)
+    # ✅ DataLoader 생성
+    train_dataset = TimeSeriesDataset(X_train_seq, y_train_seq)
+    test_dataset = TimeSeriesDataset(X_test_seq, y_test_seq)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_loader, test_loader
-
-def prepare_inference_input(n_steps, data_path=None):
-    """
-    실시간 데이터를 모델 입력 형식으로 변환합니다.
-    :param raw_data: 실시간 주가 데이터 (DataFrame)
-    :param n_steps: 입력 시퀀스 길이
-    :return: 모델 입력 데이터 (Tensor)
-    """
-    if data_path is None:
-        # 경제 데이터 로드
-        data_path = "data/processed/merged_data.csv"
-    raw_data = pd.read_csv(data_path, index_col=0)
-    # 특성 변수 추출
-    X = raw_data[INPUT_VAR].values
-
-    # 데이터 스케일링
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    # 시퀀스 데이터 생성
-    if len(X_scaled) < n_steps:
-        raise ValueError(f"데이터의 길이가 n_steps({n_steps})보다 적습니다.")
-    input_seq = X_scaled[-n_steps:]  # 최근 n_steps 시퀀스 사용
-    return torch.tensor(input_seq, dtype=torch.float32).unsqueeze(0)  # (1, n_steps, input_size)
 
 def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_date=None, duration=365):
     """
@@ -192,6 +136,7 @@ def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_dat
     date_data = test_data["Date"].values  # 날짜 데이터
 
     print(f"선택된 데이터 기간: {test_data['Date'].iloc[0]} ~ {test_data['Date'].iloc[-1]}")
+
     return price_data, feature_data, date_data
 
 def prepare_transformer_input(feature_data, n_steps=30):

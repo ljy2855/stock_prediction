@@ -50,18 +50,25 @@ class BacktestAgent:
         daily_returns = []
         cumulative_balance = []
         signals = []
+        predictions = []  # Transformer 모델의 30차원 벡터 저장
         trades = []
 
         for i in range(self.n_steps, len(self.price_data)):
+            # 입력 데이터 생성
             input_sequence = torch.tensor(self.feature_data[i-self.n_steps:i], dtype=torch.float32).unsqueeze(0)
             input_sequence = input_sequence.numpy()
             
-            signal_value = self.model.predict(input_sequence)
+            # Transformer 모델 예측
+            signal_value = self.model.predict(input_sequence)  # (1, 30)
+            predictions.append(signal_value.flatten())  # Flatten to (30,)
+            
+            # 신호 생성
             signal = self._generate_signal(signal_value)
-
             signals.append(signal)
+            
             price = self.price_data[i]
 
+            # 매수/매도 로직
             if signal > 0 and position == 0:  # BUY
                 position = balance / price
                 balance = 0
@@ -78,19 +85,23 @@ class BacktestAgent:
             daily_return = (portfolio_value - cumulative_balance[-2]) / cumulative_balance[-2] if len(cumulative_balance) > 1 else 0
             daily_returns.append(daily_return)
 
+        # 결과 저장
         results = pd.DataFrame({
             "Date": self.date_data[self.n_steps:],
             "Price": self.price_data[self.n_steps:],
             "Signal": signals,
+            "Prediction": predictions,  # Transformer 모델의 30차원 벡터 저장
             "Portfolio Value": cumulative_balance,
             "Daily Return": daily_returns,
         })
+
         trades_df = pd.DataFrame(trades)
 
         final_portfolio_value = cumulative_balance[-1] if cumulative_balance else balance
         total_return = (final_portfolio_value - self.initial_balance) / self.initial_balance
 
         return results, total_return, final_portfolio_value, trades_df
+
 
     def _generate_signal(self, signal_values):
         """
