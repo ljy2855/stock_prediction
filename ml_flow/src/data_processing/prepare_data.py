@@ -7,9 +7,21 @@ from torch.utils.data import Dataset, DataLoader
 
 
 
-INPUT_VAR = ['FEDFUNDS', 'Price', 'CPIAUCNS', 'Volume',
-             #'Close', 'High', 'Low', 'Open', 
-             ]
+INPUT_VAR = [
+    'FEDFUNDS',        # Federal Funds Rate
+    'Close',           # 주식 가격 (대표 값, 종가 또는 특정 값)
+    'CPIAUCNS',        # Consumer Price Index
+    'Volume',          # 거래량
+    'UNRATE',          # Unemployment Rate
+    'GDPC1',           # Real GDP
+    'UMCSENT',         # Consumer Confidence Index
+    'DGS10',           # 10-Year Treasury Rate
+    'HOUST',           # Housing Starts
+    'ISRATIO',         # Inventory to Sales Ratio
+    'TWEXB',           # Trade Weighted U.S. Dollar Index
+    'PI',              # Personal Income
+]
+
 
 def create_labels(price_data, window=20, threshold=0.01):
     """
@@ -38,7 +50,7 @@ def create_labels(price_data, window=20, threshold=0.01):
     return labels
 
 
-def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64, d_model=8):
+def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, batch_size=64):
     """
     데이터를 Transformer 모델에 맞게 시퀀스 형태로 변환.
     특정 피처(FEDFUNDS, CPIAUCNS)는 스케일링에서 제외하며, 나머지 피처는 로그 변화율로 변환.
@@ -47,18 +59,19 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
         merged_data = pd.read_csv('data/processed/merged_data.csv', index_col=0)
     
     # Target Momentum 생성
-    price = merged_data['Price'].values
+    price = merged_data['Close'].values
+    rolling_window = 10  # 이동 평균 창 크기
+    price_smooth = pd.Series(price).rolling(rolling_window).mean().values
     target_momentum = np.zeros(len(price))
     for i in range(len(price) - forecast_steps):
-        target_momentum[i] = (price[i + forecast_steps] - price[i]) / price[i]
+        target_momentum[i] = (price_smooth[i + forecast_steps] - price_smooth[i]) / price_smooth[i]
     merged_data['Target_Momentum'] = target_momentum
 
     # 결측값 제거
     merged_data = merged_data.dropna()
 
     # 피처 로그 변화율로 변경
-    scale_features = ['Volume', 'Price']  # 변화율로 변환할 피처
-    exclude_features = ['FEDFUNDS', 'CPIAUCNS']  # 변화율 계산 제외 피처
+    scale_features = ['Volume', 'Close']  # 변화율로 변환할 피처
 
     for feature in scale_features:
         merged_data[feature] = merged_data[feature].pct_change().fillna(0)
@@ -68,7 +81,7 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
     y = merged_data['Target_Momentum'].values.reshape(-1,1)  # 타겟 데이터
 
     # 데이터 분할
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, shuffle=False)
     print(f"y_train shape: {y_train.shape}, y_test shape: {y_test.shape}")
 
     if len(X_test) < n_steps:

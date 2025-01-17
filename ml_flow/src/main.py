@@ -22,37 +22,10 @@ def init_data():
     stock_data = download_stock_data(TICKER, START_DATE, END_DATE, stock_data_path)
 
     # 경제 데이터 다운로드 및 저장
-    rate_data, cpi_data = download_economic_data(START_DATE, END_DATE, config.get_path("paths", "raw_data", "economic_data"))
+    economic_data = download_economic_data(START_DATE, END_DATE, config.get_path("paths", "raw_data", "economic_data"))
 
     # 데이터 병합
-    merged_data = merge_data(stock_data, rate_data, cpi_data, config.get_path("paths", "processed_data", "stock_data"))
+    merged_data = merge_data(stock_data, economic_data, config.get_path("paths", "processed_data", "stock_data"))
 
 if __name__ == "__main__":
-    # init_data()
-
-    train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=64)
-
-    # LSTM 모델 초기화
-    # input_size = 3
-    # hidden_size = 64
-    # output_size = 1
-
-    # lstm_model = LSTMModel(input_size, hidden_size, output_size)
-    # trainer = TimeSeriesModel(lstm_model, lr=0.001, model_name="LSTM")
-
-
-
-    # Transformer 모델 초기화
-    input_size = 8  # 입력 feature 수
-    d_model = 128   # 임베딩 차원
-    nhead = 4       # 멀티헤드 어텐션 수
-    num_layers = 6  # Transformer 레이어 수
-    forecast_steps = 30  # 예측 벡터 크기
-
-    transformer_model = TransformerTimeSeriesModel(input_size, d_model, nhead, num_layers, forecast_steps)
-    trainer = TimeSeriesModel(transformer_model, lr=0.001, model_name="Transformer")
-
-    # 훈련 및 평가
-    trainer.train(train_loader, num_epochs=100, verbose=True, early_stopping=True, patience=10)
-    trainer.evaluate(test_loader)
-    trainer.save_model()
+    init_data()
