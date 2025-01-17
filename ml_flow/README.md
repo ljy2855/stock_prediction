@@ -43,7 +43,7 @@
 
 ## 모델 학습
 
-![학습 코드](./src/train.py)
+[학습 코드](https://github.com/ljy2855/stock_prediction/blob/main/ml_flow/src/train.py)
 
 ### 학습 구성
 
@@ -55,7 +55,8 @@
 
 ## 모델 평가
 
-![평가 코드](./src/evaluation.py)
+[평가 코드](https://github.com/ljy2855/stock_prediction/blob/main/ml_flow/src/train.py)
+
 ![모델 예측 평가](./latest_model_evaluation.png)
 
 ## 백테스트
