@@ -21,7 +21,7 @@ class TimeSeriesModel:
         self.model_name = model_name + datetime.now().strftime("_%Y%m%d_%H%M%S")
         self.device = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
-        self.criterion = nn.SmoothL1Loss()
+        self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
     @mlflow_log_training
@@ -49,9 +49,8 @@ class TimeSeriesModel:
                     epoch_loss += loss.item()
                     tepoch.set_postfix(batch_loss=loss.item())
                     
-                    # 출력 디버깅 (선택)
-                    if epoch % 10 == 0:
-                        print(f"Sample prediction: {outputs[0].item()}, Target: {targets[0].item()}")
+                    
+                    # print(f"Sample prediction: {outputs[0].item()}, Target: {targets[0].item()}")
                     
                 scheduler.step()  # 학습률 업데이트
 
