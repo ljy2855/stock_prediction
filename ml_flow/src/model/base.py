@@ -21,7 +21,7 @@ class TimeSeriesModel:
         self.model_name = model_name + datetime.now().strftime("_%Y%m%d_%H%M%S")
         self.device = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.HuberLoss(delta=1.0)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
     @mlflow_log_training

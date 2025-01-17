@@ -55,8 +55,11 @@ class BacktestAgent:
 
         for i in range(self.n_steps, len(self.price_data)):
             # 입력 데이터 생성
-            input_sequence = torch.tensor(self.feature_data[i-self.n_steps:i], dtype=torch.float32).unsqueeze(0)
-            input_sequence = input_sequence.numpy()
+            input_sequence = (
+                torch.tensor(self.feature_data[i - self.n_steps : i], dtype=torch.float32)
+                .unsqueeze(0)  # Shape: (1, n_steps, num_features)
+                .numpy()       # Convert to numpy array
+            )
             
             # Transformer 모델 예측
             signal_value = self.model.predict(input_sequence)  # (1, 30)
@@ -72,9 +75,11 @@ class BacktestAgent:
             if signal > 0 and position == 0:  # BUY
                 position = balance / price
                 balance = 0
+                print(f"BUY: {self.date_data[i]} - Price: {price}")
                 trades.append({"Date": self.date_data[i], "Price": price, "Type": "BUY"})
 
             elif signal < 0 and position > 0:  # SELL
+                print(f"SELL: {self.date_data[i]} - Price: {price}")
                 balance = position * price * (1 - self.transaction_cost)
                 position = 0
                 trades.append({"Date": self.date_data[i], "Price": price, "Type": "SELL"})
@@ -107,9 +112,7 @@ class BacktestAgent:
         """
         신호 생성 메서드.
         """
-        normalized_values = (signal_values - np.mean(signal_values)) / (np.std(signal_values) + 1e-9)
-        scaled_values = normalized_values * 1e6
-        avg_signal = np.mean(scaled_values)
+        avg_signal = np.mean(signal_values)
         if avg_signal > self.signal_threshold:
             return 1  # 매수
         elif avg_signal < -self.signal_threshold:

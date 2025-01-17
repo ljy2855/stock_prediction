@@ -22,6 +22,16 @@ INPUT_VAR = [
     'PI',              # Personal Income
 ]
 
+SCALED_VAR = [
+    'Close',           # 주식 가격 (값의 크기가 큼)
+    'Volume',          # 거래량 (값의 크기가 큼)
+    'GDPC1',           # Real GDP (값의 크기가 큼)
+    'CPIAUCNS',        # Consumer Price Index (물가 수준)
+    'PI',              # Personal Income (값의 크기가 큼)
+    'HOUST',           # Housing Starts (값의 크기가 큼)
+    'TWEXB',           # Trade Weighted U.S. Dollar Index (변동성 있음)
+]
+
 
 def create_labels(price_data, window=20, threshold=0.01):
     """
@@ -67,18 +77,17 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
         target_momentum[i] = (price_smooth[i + forecast_steps] - price_smooth[i]) / price_smooth[i]
     merged_data['Target_Momentum'] = target_momentum
 
-    # 결측값 제거
-    merged_data = merged_data.dropna()
-
+    
     # 피처 로그 변화율로 변경
-    scale_features = ['Volume', 'Close']  # 변화율로 변환할 피처
-
+    scale_features = SCALED_VAR  # 변화율로 변환할 피처
     for feature in scale_features:
-        merged_data[feature] = merged_data[feature].pct_change().fillna(0)
+        merged_data[feature] = merged_data[feature].pct_change()
 
+    # 결측치 제거 (모든 연산 후)
+    merged_data = merged_data.dropna().reset_index(drop=True)
     # 특성 및 타겟 분리
     X = merged_data[INPUT_VAR].values  # 입력 피처 데이터
-    y = merged_data['Target_Momentum'].values.reshape(-1,1)  # 타겟 데이터
+    y = merged_data['Target_Momentum'].values.reshape(-1, 1)  # 타겟 데이터
 
     # 데이터 분할
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, shuffle=False)
@@ -102,7 +111,6 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
     X_test_seq, y_test_seq = create_sequences(X_test, y_test, n_steps)
     print(f"Train Sequence Shape: {X_train_seq.shape}, Test Sequence Shape: {X_test_seq.shape}")
 
-
     class TimeSeriesDataset(Dataset):
         def __init__(self, X, y):
             self.X = torch.tensor(X, dtype=torch.float32)
@@ -123,15 +131,12 @@ def prepare_data_for_sequences(merged_data=None, n_steps=30, forecast_steps=30, 
 
     return train_loader, test_loader
 
+
 def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_date=None, duration=365):
     """
-    백테스트를 위한 데이터를 준비합니다. 특정 피처(FEDFUNDS, CPIAUCNS)는 로그 변화율 계산에서 제외합니다.
-    :param data_path: 데이터 경로
-    :param start_date: 백테스트 시작 날짜
-    :param duration: 백테스트 기간 (일 단위)
-    :return: 가격 데이터, 특성 데이터, 날짜 데이터
+    백테스트 데이터를 준비합니다. 가격, 특성, 날짜만 반환합니다.
     """
-    # 경제 데이터 로드
+    # 데이터 로드
     test_data = pd.read_csv(data_path)
 
     if test_data is None or test_data.empty:
@@ -143,8 +148,8 @@ def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_dat
 
     # 기간 필터링
     if start_date is None:
-        random_start_idx = np.random.randint(0, len(test_data) - duration)  # 시작점 
-        test_data = test_data.iloc[random_start_idx:random_start_idx + duration]  
+        random_start_idx = np.random.randint(0, len(test_data) - duration)
+        test_data = test_data.iloc[random_start_idx:random_start_idx + duration]
     else:
         start_date = pd.to_datetime(start_date)
         test_data = test_data[test_data['Date'] >= start_date]
@@ -153,31 +158,27 @@ def prepare_backtest_input(data_path='data/processed/merged_data.csv', start_dat
     if test_data.empty:
         raise ValueError("선택된 기간에 해당하는 데이터가 없습니다.")
 
-    # 로그 변화율로 변환할 피처와 제외할 피처 분리
-    scale_features = ['Close', 'Volume', 'High', 'Low', 'Open', 'Price']  # 로그 변화율로 변환할 피처
-    exclude_features = ['FEDFUNDS', 'CPIAUCNS']  # 로그 변화율 계산 제외 피처
+    # 원본 Close 값 저장
+    original_price_data = test_data['Close'].values
 
-    # 로그 변화율 계산
+    # 로그 변화율 적용
+    scale_features = SCALED_VAR
     for feature in scale_features:
-        test_data[feature] = np.log1p(test_data[feature]).diff().fillna(0)  # 로그 변화율 계산
+        test_data[feature] = test_data[feature].pct_change()
 
-    # 스케일링 제외 데이터 유지
-    exclude_df = test_data[exclude_features]
+    # 결측치 제거
+    test_data = test_data.dropna().reset_index(drop=True)
+    original_price_data = original_price_data[len(original_price_data) - len(test_data):]
 
-    # 로그 변화율 계산된 데이터와 제외된 데이터를 병합
-    processed_data = test_data[scale_features].join(exclude_df)
+    # 입력 특성 준비
+    feature_data = test_data[INPUT_VAR].values  # 특성 데이터
+    date_data = test_data['Date'].values        # 결측치 제거된 날짜 데이터
 
-    # 병합 후 순서 맞추기
-    processed_data = processed_data[INPUT_VAR].values
+    print(f"Feature Shape: {feature_data.shape}, Price Shape: {original_price_data.shape}, Date Shape: {len(date_data)}")
 
-    # 필요한 데이터 추출
-    price_data = test_data["Price"].values  # 종가 데이터
-    feature_data = processed_data  # 전처리된 특성 데이터
-    date_data = test_data["Date"].values  # 날짜 데이터
+    return original_price_data, feature_data, date_data
 
-    print(f"선택된 데이터 기간: {test_data['Date'].iloc[0]} ~ {test_data['Date'].iloc[-1]}")
 
-    return price_data, feature_data, date_data
 
 
 def prepare_transformer_input(feature_data, n_steps=30):
@@ -199,7 +200,7 @@ def prepare_transformer_input(feature_data, n_steps=30):
     return input_tensor
 
 if __name__ == "__main__":
-    train_loader, test_loader = prepare_data_for_sequences(n_steps=1, forecast_steps=30, batch_size=64, d_model=8)
+    train_loader, test_loader = prepare_data_for_sequences(n_steps=30, batch_size=30,forecast_steps=30)
     for X, y in train_loader:
         print(f"Train Input Shape: {X.shape}, Train Target Shape: {y.shape}")
         break
