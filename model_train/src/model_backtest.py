@@ -13,7 +13,7 @@ import mlflow
 os.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
 
 model_name = "pytorch-transformer-time-series-model"
-version = 9
+version = "latest"
 
 model_uri = f"models:/{model_name}/{version}"
 print(f"ℹ️ Loading model from URI: {model_uri}")
@@ -57,7 +57,7 @@ with mlflow.start_run(run_name="backtest_evaluation"):
             n_steps=30,
             initial_balance=initial_balance,
             transaction_cost=0.001,
-            signal_threshold=0.01,
+            signal_threshold=0.05,
             risk_tolerance=0.3,
         )
 
