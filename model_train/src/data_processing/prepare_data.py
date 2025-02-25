@@ -20,6 +20,7 @@ INPUT_VAR = [
     'ISRATIO',         # Inventory to Sales Ratio
     'TWEXB',           # Trade Weighted U.S. Dollar Index
     'PI',              # Personal Income
+    'news_sentiment_score', # 뉴스 감정 점수
 ]
 
 SCALED_VAR = [

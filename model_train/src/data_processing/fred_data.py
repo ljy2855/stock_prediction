@@ -24,7 +24,7 @@ economic_indicators = {
     "PI": "Personal Income"
 }
 
-def download_economic_data(start_date, end_date, save_path):
+def download_economic_data(start_date, end_date, save_path) -> pd.DataFrame:
     """
     지정된 경제 지표 데이터를 다운로드하고 저장합니다.
     """
@@ -38,16 +38,14 @@ def download_economic_data(start_date, end_date, save_path):
             data = pd.DataFrame(data, columns=[code])  # DataFrame으로 변환
             data.index.name = "Date"  # 인덱스를 Date로 명명
 
-            # CSV 파일로 저장 (인덱스 포함)
-            file_path = f"{save_path}/{code}_{start_date}_{end_date}.csv"
-            data.to_csv(file_path, mode='w', index=True)  # index=True 추가
-            print(f"Saved {description} to {file_path}")
-
             all_data[code] = data
         except Exception as e:
             print(f"Failed to download {description} ({code}): {e}")
 
-    return all_data
+    # 데이터를 합쳐서 저장
+    merged_data = pd.concat(all_data.values(), axis=1)
+    merged_data.to_csv(f"{save_path}/economic_data_{start_date}_{end_date}.csv", mode='w', index=True)
+    return merged_data
 
 
 

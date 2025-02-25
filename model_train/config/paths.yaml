@@ -6,7 +6,7 @@ paths:
     economic_data: "data/raw/economic_data"
   processed_data:
     stock_data: "data/processed/"
-    news_with_sentiment: "data/processed/news_with_sentiment/"
+    news_sentiment: "data/processed/news_sentiment.csv"
     tweets_with_sentiment: "data/processed/tweets_with_sentiment/"
     merged_data: "data/processed/merged_data.csv"
   logs:

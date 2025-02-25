@@ -1,6 +1,7 @@
 import calendar
 import csv
 import time
+import pandas as pd
 import requests
 import os
 import torch
@@ -119,7 +120,6 @@ def get_articles_for_period(keywords_list, start_year, end_year):
     """
     all_articles = []
     filename = f"inflation_news_{start_year}_{end_year}.csv"
-    # filename = "inflation_news_2018_2023Q1.csv"
     fieldnames = ["keyword", "year", "quarter", "headline", "pub_date", "web_url", "snippet"]
 
     if os.path.exists(filename):
@@ -223,8 +223,22 @@ def save_merged_articles(articles_data, filename):
         for row in articles_data:
             writer.writerow(row)
 
+def get_news_semantic_score(START_DATE:str, END_DATE:str, news_data_path:str) -> pd.DataFrame:
+    # 뉴스 데이터 로드
+    
+    if os.path.exists(news_data_path):
+        articles = pd.read_csv(news_data_path)
+
+        # 기간 필터링
+        articles = articles[articles["Date"] >= START_DATE]
+        articles = articles[articles["Date"] <= END_DATE]
+
+        return articles
+    else:
+        raise FileNotFoundError(f"존재하지 않는 파일: {news_data_path}")
 
 
+    
 if __name__ == "__main__":
     keywords_list = [
         "inflation",
@@ -235,10 +249,10 @@ if __name__ == "__main__":
     articles = get_articles_for_period(keywords_list, start_year, end_year)
 
     # 기사 분석
-    # analyzed_data = analyze_articles(articles)
+    analyzed_data = analyze_articles(articles)
 
-    # merged_data = merge_semantic_score(analyzed_data)
+    merged_data = merge_semantic_score(analyzed_data)
 
-    # save_merged_articles(merged_data, "news.csv")
+    save_merged_articles(merged_data, "news.csv")
 
     

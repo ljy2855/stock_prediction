@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 
     # Transformer 모델 초기화
-    input_size = 12  # 입력 feature 수
+    input_size = 13  # 입력 feature 수
     d_model = 256   # 임베딩 차원
     nhead = 16       # 멀티헤드 어텐션 수
     num_layers = 16  # Transformer 레이어 수
@@ -35,5 +35,5 @@ if __name__ == "__main__":
 
     # 훈련 및 평가
     with mlflow.start_run(run_name=trainer.model_name):
-        trainer.train(train_loader, num_epochs=30, verbose=True, early_stopping=True, patience=3)
+        trainer.train(train_loader, num_epochs=6, verbose=True, early_stopping=True, patience=3)
         trainer.evaluate(test_loader,window_size=n_steps)
