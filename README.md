@@ -1,6 +1,6 @@
 # ML 기반 주가 예측 프로젝트
 
-주가 데이터, 금리, 물가 상승률 등 경제 지표를 활용한 머신러닝 모델로 주가를 예측하고, 학습된 모델을 배포 및 관리
+주가 데이터, 금리, 물가 상승률 등 경제 지표, 뉴스 감정 점수를 활용한 머신러닝 모델로 주가를 예측하고, 학습된 모델을 배포 및 관리
 
 1. 정확한 주가 예측 모델 구축
 2. 실시간 데이터 파이프라인 운영
@@ -12,7 +12,7 @@
 📌 1. Model Train & Serving
 
 * 모델 학습: 주가 데이터와 경제 지표를 활용한 머신러닝 모델 학습.
-* 모델 서빙: REST API를 통해 모델 예측값 제공.
+* 모델 서빙: FastAPI를 통해 모델 서빙
 * 버전 관리: MLflow를 사용한 모델 및 데이터셋 버전 관리.
 
 📌 2. Web Service
@@ -52,3 +52,4 @@ stock_ml_project/
 
 [Financial Time Series Prediction](https://arxiv.org/pdf/2312.15235)
 
+[FinBERT: Financial Sentiment Analysis with Pre-trained Language Models](https://arxiv.org/abs/1908.10063)
